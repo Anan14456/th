@@ -1,0 +1,900 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบเก็บเงินค่าห้องรายอาทิตย์</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #4a148c, #ab47bc);
+            color: #e1bee7;
+            font-family: 'Kanit', sans-serif;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+        .navbar {
+            background: #7b1fa2;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .navbar a {
+            color: #e1bee7;
+            text-decoration: none;
+            margin: 0 15px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: color 0.3s ease;
+            pointer-events: auto;
+        }
+        .navbar a:hover, .navbar a.active {
+            color: #b39ddb;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            font-size: 2.2rem;
+            color: #b39ddb;
+            margin-bottom: 30px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(8px);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+        }
+        .card h2 {
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+            color: #b39ddb;
+        }
+        .form-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        input, select, button {
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            color: #e1bee7;
+            font-size: 1rem;
+            flex: 1;
+            min-width: 150px;
+            cursor: pointer;
+        }
+        input::placeholder {
+            color: #d1c4e9;
+        }
+        select {
+            appearance: none;
+            background-image: url('data:image/svg+xml;utf8,<svg fill="%23e1bee7" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/><path d="M0 0h24v24H0z" fill="none"/></svg>');
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+        }
+        button {
+            background: linear-gradient(45deg, #7b1fa2, #ab47bc);
+            transition: background 0.3s ease;
+        }
+        button:hover:enabled {
+            background: linear-gradient(45deg, #4a148c, #7b1fa2);
+        }
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        .delete-btn, .action-btn {
+            background: linear-gradient(45deg, #c2185b, #f06292);
+        }
+        .delete-btn:hover:enabled, .action-btn:hover:enabled {
+            background: linear-gradient(45deg, #880e4f, #c2185b);
+        }
+        input[type="checkbox"] {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #ffffff;
+            border-radius: 4px;
+            cursor: pointer;
+            vertical-align: middle;
+        }
+        input[type="checkbox"]:checked {
+            background: #7b1fa2;
+            background-image: url('data:image/svg+xml;utf8,<svg fill="%23e1bee7" height="16" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>');
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ce93d8;
+            color: #e1bee7;
+        }
+        th {
+            background: #7b1fa2;
+            font-weight: 600;
+            color: #b39ddb;
+        }
+        .unpaid {
+            background: #d32f2f;
+            color: #e1bee7;
+        }
+        .paid {
+            background: #388e3c;
+            color: #e1bee7;
+        }
+        .log-entry {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            color: #e1bee7;
+        }
+        .page {
+            display: none;
+        }
+        .page.active {
+            display: block;
+        }
+        .error {
+            color: #d32f2f;
+            text-align: center;
+            margin: 20px 0;
+            font-size: 1.2rem;
+        }
+        @media print {
+            body {
+                background: #ffffff;
+                color: #000000;
+            }
+            .navbar, .container, .card, .log-entry {
+                background: none;
+                box-shadow: none;
+                backdrop-filter: none;
+            }
+            .page, .form-group, button, input[type="checkbox"] {
+                display: none;
+            }
+            #nonPayersList {
+                display: block !important;
+            }
+            table, th, td {
+                border: 1px solid #000;
+                background: none;
+                color: #000000;
+            }
+        }
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 1.8rem;
+            }
+            .navbar a {
+                margin: 0 10px;
+                font-size: 1rem;
+            }
+            .card {
+                padding: 15px;
+            }
+            input, select, button {
+                font-size: 0.9rem;
+                min-width: 100%;
+            }
+            th, td {
+                font-size: 0.85rem;
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <div class="navbar">
+        <a href="#home" class="nav-link active">หน้าแรก</a>
+        <a href="#members" class="nav-link">สมาชิก</a>
+        <a href="#payments" class="nav-link">การชำระเงิน</a>
+        <a href="#weeks" class="nav-link">สัปดาห์</a>
+        <a href="#revenue" class="nav-link">รายรับ</a>
+        <a href="#logs" class="nav-link">บันทึก</a>
+    </div>
+
+    <!-- Pages -->
+    <div class="container">
+        <!-- Home Page -->
+        <div id="home" class="page active">
+            <h1>ยินดีต้อนรับสู่ระบบเก็บเงินค่าห้องรายอาทิตย์</h1>
+            <div class="card">
+                <h2>ภาพรวม</h2>
+                <p>จัดการสมาชิก, การชำระเงิน, และสัปดาห์ได้อย่างง่ายดาย ดูสรุปยอดรายรับและบันทึกการดำเนินการทั้งหมด</p>
+                <p>เลือกเมนูด้านบนเพื่อเริ่มใช้งาน</p>
+                <button onclick="testButton()">ทดสอบปุ่ม</button>
+            </div>
+        </div>
+
+        <!-- Members Page -->
+        <div id="members" class="page">
+            <h1>จัดการสมาชิก</h1>
+            <div class="card">
+                <h2>เพิ่มสมาชิก</h2>
+                <form id="memberForm" class="form-group">
+                    <input type="text" id="memberName" placeholder="ชื่อสมาชิก" required>
+                    <button type="submit">เพิ่ม</button>
+                </form>
+            </div>
+            <div class="card">
+                <h2>รายชื่อสมาชิก</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ชื่อสมาชิก</th>
+                            <th>การดำเนินการ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="memberTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Payments Page -->
+        <div id="payments" class="page">
+            <h1>จัดการการชำระเงิน</h1>
+            <div class="card">
+                <h2>สถานะการชำระเงิน</h2>
+                <div class="form-group">
+                    <select id="paymentWeek" onchange="renderPayments()">
+                        <option value="">เลือกสัปดาห์</option>
+                    </select>
+                    <button class="action-btn" onclick="exportToExcel()">ส่งออก Excel</button>
+                    <button class="action-btn" onclick="exportToPDF()">ส่งออก PDF</button>
+                    <button class="action-btn" onclick="printNonPayers()">พิมพ์รายชื่อผู้ยังไม่จ่าย</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ชื่อสมาชิก</th>
+                            <th>สถานะ</th>
+                            <th>ชำระเงิน</th>
+                        </tr>
+                    </thead>
+                    <tbody id="paymentTableBody"></tbody>
+                </table>
+            </div>
+            <!-- Non-Payers List for Printing -->
+            <div id="nonPayersList" style="display: none;">
+                <h2>รายชื่อผู้ยังไม่ชำระเงิน</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ชื่อสมาชิก</th>
+                        </tr>
+                    </thead>
+                    <tbody id="nonPayersTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Weeks Page -->
+        <div id="weeks" class="page">
+            <h1>จัดการสัปดาห์</h1>
+            <div class="card">
+                <h2>เพิ่มสัปดาห์</h2>
+                <form id="weekForm" class="form-group">
+                    <input type="number" id="weekNumber" placeholder="หมายเลขสัปดาห์" required>
+                    <input type="date" id="weekDate" required>
+                    <button type="submit">เพิ่ม</button>
+                </form>
+            </div>
+            <div class="card">
+                <h2>รายการสัปดาห์</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>สัปดาห์</th>
+                            <th>วันที่</th>
+                            <th>การดำเนินการ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="weekTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Revenue Page -->
+        <div id="revenue" class="page">
+            <h1>สรุปยอดรายรับ</h1>
+            <div class="card">
+                <h2>ยอดรวมต่อสัปดาห์</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>สัปดาห์</th>
+                            <th>วันที่</th>
+                            <th>ยอดรวม (บาท)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="revenueTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Logs Page -->
+        <div id="logs" class="page">
+            <h1>บันทึกการดำเนินการ</h1>
+            <div class="card">
+                <h2>รายการบันทึก</h2>
+                <div id="logList"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+    <!-- SheetJS for Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- jsPDF and autoTable for PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
+    <script>
+        // Test Button
+        function testButton() {
+            console.log('ปุ่มทดสอบถูกคลิก');
+            alert('ปุ่มทดสอบทำงาน!');
+        }
+
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            databaseURL: "YOUR_DATABASE_URL",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Initialize Firebase
+        let db;
+        try {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.database();
+            console.log('Firebase เริ่มต้นสำเร็จ');
+        } catch (error) {
+            console.log(`Firebase เริ่มต้นล้มเหลว: ${error.message}`);
+            document.querySelector('.container').innerHTML += '<p class="error">ไม่สามารถเชื่อมต่อ Firebase ได้ กรุณาตรวจสอบการกำหนดค่า</p>';
+            // Fallback to local storage
+            db = {
+                ref: path => ({
+                    once: () => Promise.resolve({ val: () => null }),
+                    set: () => Promise.resolve()
+                })
+            };
+        }
+
+        // Initial Members
+        const initialMembers = [
+            "ณัฎพล อ่อนจันทร์", "ธนาธิบ ศรีออน", "อานันท์ วงค์จันทร์", "ศิระเดช ลุงมู", "สุรดิษ วงศ์ใจ",
+            "ชุติกาญจน์ จินะวงค์", "พัชริดา ศรีสิงห์", "สุชานันท์ ทรายผึ้ง", "สุชานาถ สินโหล่", "ณัฐณิชา แก้วคำมูล",
+            "อรอุมา ลุงสุ่ย", "กัญญาพัชร แยส่อ", "คำหล้า นายซอ", "งามศิริ นายยุง", "จิดาภา ลุงก่อ",
+            "ชัญญานุช ลุงยะ", "ดาวฤทัย ลุงดอย", "ธัญญารัตน์ แซ่หลู่", "บุญนาง ลุงปันต๊ะ", "ปาลิตา แสนคำหมื่น",
+            "พรนิชา บุญเติง", "พลอย ลุงอ่อง", "พลอย กันทะ", "มุกทิตา คำมา", "รุ่งไพลิน รัตนชัยคำ",
+            "วรรณกร นันติน้อย", "วสิตา ลุงจาย", "สุชาวดี อ่องคำ", "สาธิจันทร์ กากุล", "สุณิสา ใส่",
+            "สุดฤทัย อินแสง", "เสาวณีย์ แซ่มือ", "อรุณฉาย จะซอ", "โม ละปาน", "ประภาศรี ลุงซู่",
+            "บังอร เซียมลาย", "วาสินี ปอโต้"
+        ];
+
+        // Data Storage
+        let members = [];
+        let weeks = [];
+        let payments = [];
+        let logs = [];
+
+        // Load Data from Firebase
+        async function loadData() {
+            try {
+                const membersSnapshot = await db.ref('members').once('value');
+                members = membersSnapshot.val() || initialMembers.map((name, index) => ({ id: index + 1, name }));
+                if (!membersSnapshot.val()) {
+                    await db.ref('members').set(members);
+                    console.log('โหลดสมาชิกเริ่มต้น');
+                }
+                renderMembers();
+                updateSelects();
+                console.log('โหลดสมาชิกสำเร็จ');
+
+                const weeksSnapshot = await db.ref('weeks').once('value');
+                weeks = weeksSnapshot.val() || [];
+                renderWeeks();
+                updateSelects();
+                console.log('โหลดสัปดาห์สำเร็จ');
+
+                const paymentsSnapshot = await db.ref('payments').once('value');
+                payments = paymentsSnapshot.val() || [];
+                renderPayments();
+                renderRevenue();
+                console.log('โหลดการชำระเงินสำเร็จ');
+
+                const logsSnapshot = await db.ref('logs').once('value');
+                logs = logsSnapshot.val() || [];
+                renderLogs();
+                console.log('โหลดบันทึกสำเร็จ');
+            } catch (error) {
+                console.log(`โหลดข้อมูลล้มเหลว: ${error.message}`);
+            }
+        }
+
+        // Save to Firebase
+        async function saveData() {
+            try {
+                await Promise.all([
+                    db.ref('members').set(members),
+                    db.ref('weeks').set(weeks),
+                    db.ref('payments').set(payments),
+                    db.ref('logs').set(logs)
+                ]);
+                console.log('บันทึกข้อมูลสำเร็จ');
+            } catch (error) {
+                console.log(`บันทึกข้อมูลล้มเหลว: ${error.message}`);
+            }
+        }
+
+        // Log Action
+        function logAction(action) {
+            logs.unshift({ action, timestamp: new Date().toLocaleString('th-TH') });
+            saveData();
+            renderLogs();
+            console.log(`บันทึกการกระทำ: ${action}`);
+        }
+
+        // Render Members
+        function renderMembers() {
+            const tbody = document.getElementById('memberTableBody');
+            if (!tbody) {
+                console.log('ไม่พบ memberTableBody');
+                return;
+            }
+            tbody.innerHTML = '';
+            members.forEach(member => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${member.name}</td>
+                    <td>
+                        <button onclick="editMember(${member.id})">แก้ไข</button>
+                        <button class="delete-btn" onclick="deleteMember(${member.id})">ลบ</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            console.log('แสดงสมาชิก');
+        }
+
+        // Add Member
+        const memberForm = document.getElementById('memberForm');
+        if (memberForm) {
+            memberForm.addEventListener('submit', async e => {
+                e.preventDefault();
+                console.log('ส่งฟอร์มสมาชิก');
+                const name = document.getElementById('memberName').value.trim();
+                if (name && !members.some(m => m.name === name)) {
+                    const newId = members.length ? Math.max(...members.map(m => m.id)) + 1 : 1;
+                    members.push({ id: newId, name });
+                    logAction(`เพิ่มสมาชิก: ${name}`);
+                    await saveData();
+                    renderMembers();
+                    updateSelects();
+                    document.getElementById('memberName').value = '';
+                } else {
+                    alert('ชื่อนี้มีอยู่แล้วหรือไม่ถูกต้อง!');
+                    console.log('เพิ่มสมาชิกไม่สำเร็จ: ชื่อซ้ำหรือไม่ถูกต้อง');
+                }
+            });
+        } else {
+            console.log('ไม่พบ memberForm');
+        }
+
+        // Edit Member
+        function editMember(id) {
+            console.log(`แก้ไขสมาชิก ID: ${id}`);
+            const newName = prompt('กรอกชื่อใหม่:', members.find(m => m.id === id).name);
+            if (newName && newName.trim() && !members.some(m => m.name === newName.trim() && m.id !== id)) {
+                const member = members.find(m => m.id === id);
+                const oldName = member.name;
+                member.name = newName.trim();
+                logAction(`แก้ไขสมาชิก: ${oldName} เป็น ${newName}`);
+                saveData();
+                renderMembers();
+                updateSelects();
+                renderPayments();
+            } else if (newName) {
+                alert('ชื่อนี้มีอยู่แล้วหรือไม่ถูกต้อง!');
+                console.log('แก้ไขสมาชิกไม่สำเร็จ: ชื่อซ้ำหรือไม่ถูกต้อง');
+            }
+        }
+
+        // Delete Member
+        function deleteMember(id) {
+            console.log(`ลบสมาชิก ID: ${id}`);
+            if (confirm('ยืนยันการลบสมาชิกนี้?')) {
+                const member = members.find(m => m.id === id);
+                members = members.filter(m => m.id !== id);
+                payments = payments.filter(p => p.memberId !== id);
+                logAction(`ลบสมาชิก: ${member.name}`);
+                saveData();
+                renderMembers();
+                updateSelects();
+                renderPayments();
+            }
+        }
+
+        // Render Weeks
+        function renderWeeks() {
+            const tbody = document.getElementById('weekTableBody');
+            if (!tbody) {
+                console.log('ไม่พบ weekTableBody');
+                return;
+            }
+            tbody.innerHTML = '';
+            weeks.forEach(week => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>สัปดาห์ที่ ${week.number}</td>
+                    <td>${week.date}</td>
+                    <td><button class="delete-btn" onclick="deleteWeek(${week.number})">ลบ</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+            console.log('แสดงสัปดาห์');
+        }
+
+        // Add Week
+        const weekForm = document.getElementById('weekForm');
+        if (weekForm) {
+            weekForm.addEventListener('submit', async e => {
+                e.preventDefault();
+                console.log('ส่งฟอร์มสัปดาห์');
+                const number = parseInt(document.getElementById('weekNumber').value);
+                const date = document.getElementById('weekDate').value;
+                if (!weeks.some(w => w.number === number)) {
+                    weeks.push({ number, date });
+                    logAction(`สร้างสัปดาห์ที่ ${number} วันที่ ${date}`);
+                    await saveData();
+                    renderWeeks();
+                    updateSelects();
+                    renderPayments();
+                    document.getElementById('weekForm').reset();
+                } else {
+                    alert('สัปดาห์นี้มีอยู่แล้ว!');
+                    console.log('เพิ่มสัปดาห์ไม่สำเร็จ: สัปดาห์ซ้ำ');
+                }
+            });
+        } else {
+            console.log('ไม่พบ weekForm');
+        }
+
+        // Delete Week
+        function deleteWeek(number) {
+            console.log(`ลบสัปดาห์: ${number}`);
+            if (confirm('ยืนยันการลบสัปดาห์นี้?')) {
+                weeks = weeks.filter(w => w.number !== number);
+                payments = payments.filter(p => p.weekNumber !== number);
+                logAction(`ลบสัปดาห์ที่ ${number}`);
+                saveData();
+                renderWeeks();
+                updateSelects();
+                renderPayments();
+                renderRevenue();
+            }
+        }
+
+        // Render Payments
+        function renderPayments() {
+            const tbody = document.getElementById('paymentTableBody');
+            if (!tbody) {
+                console.log('ไม่พบ paymentTableBody');
+                return;
+            }
+            const selectedWeek = document.getElementById('paymentWeek').value;
+            tbody.innerHTML = '';
+            members.forEach(member => {
+                const paid = selectedWeek ? payments.some(p => p.memberId === member.id && p.weekNumber === parseInt(selectedWeek)) : false;
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${member.name}</td>
+                    <td class="${selectedWeek ? (paid ? 'paid' : 'unpaid') : ''}">
+                        ${selectedWeek ? (paid ? 'ชำระแล้ว' : 'ยังไม่ชำระ') : 'เลือกสัปดาห์'}
+                    </td>
+                    <td>
+                        ${selectedWeek ? `<input type="checkbox" ${paid ? 'checked' : ''} onchange="togglePayment(${member.id}, ${selectedWeek}, this.checked)">` : ''}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            console.log('แสดงการชำระเงิน');
+        }
+
+        // Toggle Payment
+        async function togglePayment(memberId, weekNumber, isChecked) {
+            console.log(`เปลี่ยนสถานะการชำระเงิน: สมาชิก ID ${memberId}, สัปดาห์ ${weekNumber}, ${isChecked ? 'ชำระ' : 'ยกเลิก'}`);
+            const member = members.find(m => m.id === memberId);
+            const week = weeks.find(w => w.number === parseInt(weekNumber));
+            if (isChecked) {
+                if (!payments.some(p => p.memberId === memberId && p.weekNumber === parseInt(weekNumber))) {
+                    payments.push({ memberId, weekNumber: parseInt(weekNumber), amount: 10 });
+                    logAction(`บันทึกการชำระเงิน: ${member.name} สัปดาห์ที่ ${weekNumber} (${week.date}) 10 บาท`);
+                }
+            } else {
+                payments = payments.filter(p => !(p.memberId === memberId && p.weekNumber === parseInt(weekNumber)));
+                logAction(`ยกเลิกการชำระเงิน: ${member.name} สัปดาห์ที่ ${weekNumber} (${week.date})`);
+            }
+            await saveData();
+            renderPayments();
+            renderRevenue();
+        }
+
+        // Update Week Select
+        function updateSelects() {
+            const weekSelect = document.getElementById('paymentWeek');
+            if (!weekSelect) {
+                console.log('ไม่พบ paymentWeek');
+                return;
+            }
+            weekSelect.innerHTML = '<option value="">เลือกสัปดาห์</option>';
+            weeks.forEach(week => {
+                weekSelect.innerHTML += `<option value="${week.number}">สัปดาห์ที่ ${week.number} (${week.date})</option>`;
+            });
+            console.log('อัปเดต dropdown สัปดาห์');
+        }
+
+        // Render Revenue Summary
+        function renderRevenue() {
+            const tbody = document.getElementById('revenueTableBody');
+            if (!tbody) {
+                console.log('ไม่พบ revenueTableBody');
+                return;
+            }
+            tbody.innerHTML = '';
+            weeks.forEach(week => {
+                const total = payments.filter(p => p.weekNumber === week.number).reduce((sum, p) => sum + p.amount, 0);
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>สัปดาห์ที่ ${week.number}</td>
+                    <td>${week.date}</td>
+                    <td>${total} บาท</td>
+                `;
+                tbody.appendChild(tr);
+            });
+            console.log('แสดงรายรับ');
+        }
+
+        // Render Logs
+        function renderLogs() {
+            const logList = document.getElementById('logList');
+            if (!logList) {
+                console.log('ไม่พบ logList');
+                return;
+            }
+            logList.innerHTML = logs.map(log => `<div class="log-entry">${log.timestamp}: ${log.action}</div>`).join('');
+            console.log('แสดงบันทึก');
+        }
+
+        // Export to Excel
+        function exportToExcel() {
+            console.log('เริ่มส่งออก Excel');
+            try {
+                const selectedWeek = document.getElementById('paymentWeek').value;
+                if (!selectedWeek) {
+                    alert('กรุณาเลือกสัปดาห์!');
+                    console.log('ส่งออก Excel ล้มเหลว: ไม่มีสัปดาห์ที่เลือก');
+                    return;
+                }
+                if (!window.XLSX) {
+                    alert('ไม่สามารถโหลดไลบรารี Excel ได้ กรุณาลองใหม่');
+                    console.log('ส่งออก Excel ล้มเหลว: XLSX ไม่พร้อมใช้งาน');
+                    return;
+                }
+                if (members.length === 0) {
+                    alert('ไม่มีข้อมูลสมาชิกสำหรับส่งออก');
+                    console.log('ส่งออก Excel ล้มเหลว: ไม่มีสมาชิก');
+                    return;
+                }
+                const week = weeks.find(w => w.number === parseInt(selectedWeek));
+                const data = members.map((member, index) => ({
+                    'ลำดับ': index + 1,
+                    'ชื่อ': member.name,
+                    'สถานะ': payments.some(p => p.memberId === member.id && p.weekNumber === parseInt(selectedWeek)) ? 'ชำระแล้ว' : 'ยังไม่ชำระ'
+                }));
+                const ws = XLSX.utils.json_to_sheet(data);
+                ws['!cols'] = [{ wch: 10 }, { wch: 30 }, { wch: 15 }];
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, `สัปดาห์ที่ ${selectedWeek}`);
+                XLSX.write(wb, `Payments_Week_${selectedWeek}_${week.date}.xlsx`);
+                console.log('ส่งออก Excel สำเร็จ');
+                logAction(`ส่งออก Excel สัปดาห์ที่ ${selectedWeek}`);
+            } catch (error) {
+                console.log(`ส่งออก Excel ล้มเหลว: ${error.message}`);
+                alert('เกิดข้อผิดพลาดในการส่งออก Excel กรุณาลองใหม่');
+            }
+        }
+
+        // Export to PDF
+        function exportToPDF() {
+            console.log('เริ่มส่งออก PDF');
+            try {
+                const selectedWeek = document.getElementById('paymentWeek').value;
+                if (!selectedWeek) {
+                    alert('กรุณาเลือกสัปดาห์!');
+                    console.log('ส่งออก PDF ล้มเหลว: ไม่มีสัปดาห์ที่เลือก');
+                    return;
+                }
+                if (!window.jspdf || !window.jspdf.jsPDF || !window.jspdf.jsPDF.prototype.autoTable) {
+                    alert('ไม่สามารถโหลดไลบรารี PDF ได้ กรุณาลองใหม่');
+                    console.log('ส่งออก PDF ล้มเหลว: jsPDF หรือ autoTable ไม่พร้อมใช้งาน');
+                    return;
+                }
+                if (members.length === 0) {
+                    alert('ไม่มีข้อมูลสมาชิกสำหรับส่งออก');
+                    console.log('ส่งออก PDF ล้มเหลว: ไม่มีสมาชิก');
+                    return;
+                }
+                const week = weeks.find(w => w.number === parseInt(selectedWeek));
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                doc.setFont('Kanit', 'normal');
+                doc.text(`สถานะการชำระเงิน สัปดาห์ที่ ${selectedWeek} (${week.date})`, 14, 20);
+                const data = members.map((member, index) => [
+                    index + 1,
+                    member.name,
+                    payments.some(p => p.memberId === member.id && p.weekNumber === parseInt(selectedWeek)) ? 'ชำระแล้ว' : 'ยังไม่ชำระ'
+                ]);
+                doc.autoTable({
+                    head: [['ลำดับ', 'ชื่อสมาชิก', 'สถานะ']],
+                    body: data,
+                    theme: 'grid',
+                    styles: { font: 'Kanit', fontSize: 10, cellPadding: 2 },
+                    headStyles: { fillColor: [123, 31, 162], textColor: [255, 255, 255] },
+                    columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 100 }, 2: { cellWidth: 30 } },
+                    margin: { top: 30 }
+                });
+                doc.save(`Payments_Week_${selectedWeek}_${week.date}.pdf`);
+                console.log('ส่งออก PDF สำเร็จ');
+                logAction(`ส่งออก PDF สัปดาห์ที่ ${selectedWeek}`);
+            } catch (error) {
+                console.log(`ส่งออก PDF ล้มเหลว: ${error.message}`);
+                alert('เกิดข้อผิดพลาดในการส่งออก PDF กรุณาลองใหม่');
+            }
+        }
+
+        // Print Non-Payers
+        function printNonPayers() {
+            console.log('เริ่มพิมพ์ผู้ไม่ชำระ');
+            try {
+                const selectedWeek = document.getElementById('paymentWeek').value;
+                if (!selectedWeek) {
+                    alert('กรุณาเลือกสัปดาห์!');
+                    console.log('พิมพ์ผู้ไม่ชำระล้มเหลว: ไม่มีสัปดาห์ที่เลือก');
+                    return;
+                }
+                const week = weeks.find(w => w.number === parseInt(selectedWeek));
+                const tbody = document.getElementById('nonPayersTableBody');
+                tbody.innerHTML = '';
+                members.forEach(member => {
+                    if (!payments.some(p => p.memberId === member.id && p.weekNumber === parseInt(selectedWeek))) {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `<td>${member.name}</td>`;
+                        tbody.appendChild(tr);
+                    }
+                });
+                document.getElementById('nonPayersList').style.display = 'block';
+                window.print();
+                document.getElementById('nonPayersList').style.display = 'none';
+                console.log('พิมพ์ผู้ไม่ชำระสำเร็จ');
+                logAction(`พิมพ์ผู้ไม่ชำระ สัปดาห์ที่ ${selectedWeek}`);
+            } catch (error) {
+                console.log(`พิมพ์ผู้ไม่ชำระล้มเหลว: ${error.message}`);
+                alert('เกิดข้อผิดพลาดในการพิมพ์ กรุณาลองใหม่');
+            }
+        }
+
+        // Page Navigation
+        function initializeNavigation() {
+            const links = document.querySelectorAll('.nav-link');
+            console.log(`พบลิงก์นำทาง: ${links.length} ลิงก์`);
+            links.forEach(link => {
+                link.addEventListener('click', e => {
+                    e.preventDefault();
+                    const pageId = link.getAttribute('href').substring(1);
+                    console.log(`คลิกนำทางไปหน้า: ${pageId}`);
+                    document.querySelectorAll('.page').forEach(page => {
+                        page.classList.remove('active');
+                    });
+                    const targetPage = document.getElementById(pageId);
+                    if (targetPage) {
+                        targetPage.classList.add('active');
+                        console.log(`แสดงหน้า: ${pageId}`);
+                    } else {
+                        console.log(`ไม่พบหน้า: ${pageId}`);
+                    }
+                    links.forEach(l => l.classList.remove('active'));
+                    link.classList.add('active');
+                });
+            });
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM โหลดสมบูรณ์');
+            initializeNavigation();
+            loadData();
+        });
+
+        // Global Click Listener for Debugging
+        document.addEventListener('click', e => {
+            console.log(`คลิกที่: ${e.target.tagName} (class: ${e.target.className}, id: ${e.target.id})`);
+        });
+    </script>
+</body>
+</html>
